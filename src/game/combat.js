@@ -1,7 +1,50 @@
 import { DIFFICULTY } from "./config.js";
 // Installs this system into one application instance; initialization is deferred.
 export function install(app) {
+
+  // Registra una partida en el historial de Supabase.
+  // La importación dinámica evita bloquear el inicio del juego.
+  app.historySaved = false;
+
+  app.recordMatchHistory = function recordMatchHistory(result) {
+    if (app.historySaved || !app.M || !app.R) return;
+
+    if (
+      typeof location === "undefined" ||
+      !["http:", "https:"].includes(location.protocol)
+    ) {
+      return;
+    }
+    app.historySaved = true;
+
+    const match = {
+      gameMode: app.gameMode,
+      result,
+      score: app.M.score,
+      durationSeconds: app.R.t,
+      stats: {
+        perfectHits: app.M.perf,
+        goodHits: app.M.good,
+        misses: app.M.miss,
+        maxCombo: app.M.maxC,
+        damage: app.M.dmg,
+        ultra: app.M.ultra,
+        difficulty: app.diff,
+      },
+    };
+
+    import("../services/history.js")
+      .then(({ saveMatch }) => saveMatch(match))
+      .catch((error) => {
+        console.error(
+          "OVERBREAKER: no se pudo guardar la partida:",
+          error,
+        );
+      });
+  };
+
   app.newMatch = function newMatch() {
+    app.historySaved = false;
     app.timers.clear();
     app.fx = [];
     app.PA = [];
@@ -986,6 +1029,9 @@ export function install(app) {
       "#ffd58a",
       32,
     );
+    app.recordMatchHistory(
+      app.gameMode === "survival" ? "loss" : win ? "win" : "loss",
+    );
     app.events.emit(
       "spark",
       win ? app.eX() : app.pX(),
@@ -1232,6 +1278,9 @@ export function install(app) {
       }
   };
   app.toMenu = function toMenu() {
+    if (app.mode === "play" || app.mode === "pause") {
+      app.recordMatchHistory("abandoned");
+    }
     app.timers.clear();
     app.setMode("menu");
   };

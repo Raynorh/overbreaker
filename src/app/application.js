@@ -13,6 +13,7 @@ import { readHud, readVolumes, createSoundStore } from "../storage/browser-stora
 import { canJudge, classifyHit } from "../game/rules.js";
 import { bootstrapAudio } from "../audio/bootstrap.js";
 import { createTimers, replaceAudioSource } from "./lifecycle.js";
+import { initializeAuth } from "../services/auth.js";
 
 export function createApplication() {
   const store = createSoundStore();
@@ -28,6 +29,8 @@ export function createApplication() {
     idbAll: store.all,
   };
   app.bootstrapAudio = () => bootstrapAudio(app);
+  app.initializeAuth = () => initializeAuth(app);
+  app.initializeAuth();
   const initialize = [
     runtime,
     audio,

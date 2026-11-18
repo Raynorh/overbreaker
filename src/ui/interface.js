@@ -156,7 +156,7 @@ export function install(app) {
     app.$("configHub").classList.add("show");
     if (kind === "menu") {
       title.textContent = "CONFIGURACIÓN";
-      box.innerHTML = `<div class="cfggrid"><button class="cfgbtn" data-go="editBtn">🎨 STICKMAN</button><button class="cfgbtn" data-go="settingsBtn">⚔ DIFICULTAD</button><button class="cfgbtn" data-go="arena">🌧 ARENA</button><button class="cfgbtn" data-go="audio">🔊 SONIDO</button><button class="cfgbtn" data-go="hud">▥ HUD</button><button class="cfgbtn" data-go="keys">⌨ TECLAS (PC)</button><button class="cfgbtn" data-go="howBtn">! CÓMO JUGAR</button></div>`;
+      box.innerHTML = `<div class="cfggrid"><button class="cfgbtn" data-go="editBtn">🎨 STICKMAN</button><button class="cfgbtn" data-go="profile">👤 PERFIL</button><button class="cfgbtn" data-go="history">HISTORIAL</button><button class="cfgbtn" data-go="settingsBtn">⚔ DIFICULTAD</button><button class="cfgbtn" data-go="arena">🌧 ARENA</button><button class="cfgbtn" data-go="audio">🔊 SONIDO</button><button class="cfgbtn" data-go="hud">▥ HUD</button><button class="cfgbtn" data-go="keys">⌨ TECLAS (PC)</button><button class="cfgbtn" data-go="howBtn">! CÓMO JUGAR</button></div>`;
       box.querySelectorAll("[data-go]").forEach(
         (b) =>
           (b.onclick = () => {
@@ -284,6 +284,373 @@ export function install(app) {
             app.openConfig("hud");
           }),
       );
+    }
+ 
+    if (kind === "profile") {
+      title.textContent = "MI PERFIL";
+
+      box.innerHTML = `
+        <div style="padding:12px;color:#d8ffd0;display:grid;gap:14px">
+
+          <section style="padding:14px;border:1px solid #42634a;border-radius:10px;background:#101b14">
+            <p id="profileStatus" style="margin:0 0 12px;color:#9fd6a5;font-size:12px">
+              Consultando cuenta...
+            </p>
+
+            <label for="profileAlias" style="font-weight:bold;font-size:12px">
+              ALIAS PÚBLICO
+            </label>
+
+            <input
+              id="profileAlias"
+              type="text"
+              minlength="3"
+              maxlength="20"
+              placeholder="Ejemplo: ShadowX"
+              autocomplete="nickname"
+              style="width:100%;box-sizing:border-box;padding:11px;margin:8px 0;border-radius:7px"
+            >
+
+            <p style="font-size:11px;color:#a9bcae;margin:3px 0 10px">
+              Entre 3 y 20 caracteres. Letras, números y guion bajo.
+            </p>
+
+            <button class="cfgbtn" id="profileSave" style="width:100%">
+              GUARDAR ALIAS
+            </button>
+
+            <p id="profileMessage" role="status" style="font-size:12px"></p>
+          </section>
+
+          <section>
+            <h3 style="margin:0 0 10px;font-size:14px;color:#9ff58d">
+              RESUMEN DE RENDIMIENTO
+            </h3>
+
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px">
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">PARTIDAS</small>
+                <div data-stat="total" style="font-size:24px;font-weight:bold">—</div>
+              </div>
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">VICTORIAS</small>
+                <div data-stat="wins" style="font-size:24px;font-weight:bold;color:#72e69a">—</div>
+              </div>
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">DERROTAS</small>
+                <div data-stat="losses" style="font-size:24px;font-weight:bold;color:#ff7777">—</div>
+              </div>
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">ABANDONOS</small>
+                <div data-stat="abandoned" style="font-size:24px;font-weight:bold;color:#eab96b">—</div>
+              </div>
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">EMPATES</small>
+                <div data-stat="draws" style="font-size:24px;font-weight:bold">—</div>
+              </div>
+
+              <div style="padding:12px;background:#17251b;border:1px solid #304536;border-radius:8px">
+                <small style="color:#a9bcae">VICTORIAS</small>
+                <div data-stat="winRate" style="font-size:24px;font-weight:bold;color:#9ff58d">—%</div>
+                <small style="color:#a9bcae">Porcentaje</small>
+              </div>
+
+            </div>
+          </section>
+
+          <section style="padding:12px;border:1px solid #42634a;border-radius:9px;background:#101b14">
+            <small style="color:#a9bcae">MEJOR PUNTUACIÓN GENERAL</small>
+            <div data-stat="bestScore" style="font-size:27px;font-weight:bold;color:#ffffff;margin-top:4px">—</div>
+            <small style="color:#a9bcae">Puntos</small>
+          </section>
+
+          <section>
+            <h3 style="margin:0 0 10px;font-size:14px;color:#9ff58d">
+              ACTIVIDAD POR MODO
+            </h3>
+            <div data-profile-modes style="display:grid;gap:8px">
+              <p style="color:#a9bcae;font-size:12px">Consultando estadísticas...</p>
+            </div>
+          </section>
+
+        </div>
+      `;
+
+      const status = app.$("profileStatus");
+      const aliasInput = app.$("profileAlias");
+      const message = app.$("profileMessage");
+      const save = app.$("profileSave");
+      const modeList = box.querySelector("[data-profile-modes]");
+
+      save.disabled = true;
+
+      if (app.auth?.status !== "ready" || !app.auth.user) {
+        status.textContent =
+          app.auth?.status === "pending"
+            ? "La cuenta todavía está iniciando. Vuelve a abrir PERFIL en unos segundos."
+            : "No se pudo conectar con la cuenta. Comprueba tu conexión.";
+        modeList.textContent = "Estadísticas no disponibles.";
+        return;
+      }
+
+      status.textContent = app.auth.isGuest
+        ? "CUENTA DE INVITADO"
+        : "CUENTA VINCULADA";
+
+      const numberFormat = (value) =>
+        Number(value || 0).toLocaleString("es-CL");
+
+      import("../services/profile.js")
+        .then(async ({ getMyProfile, setMyDisplayName }) => {
+          const profile = await getMyProfile();
+
+          aliasInput.value = profile.display_name ?? "";
+          save.disabled = false;
+
+          save.onclick = async () => {
+            save.disabled = true;
+            message.textContent = "Guardando alias...";
+
+            try {
+              const updated = await setMyDisplayName(aliasInput.value);
+              aliasInput.value = updated.display_name;
+              message.textContent = "Alias guardado correctamente.";
+            } catch (error) {
+              message.textContent =
+                error.code === "23505"
+                  ? "Ese alias ya está ocupado. Prueba otro."
+                  : error.message || "No se pudo guardar el alias.";
+            } finally {
+              save.disabled = false;
+            }
+          };
+        })
+        .catch((error) => {
+          status.textContent = "No se pudo cargar el perfil.";
+          message.textContent = error.message;
+        });
+
+      import("../services/history.js")
+        .then(({ getMyProfileStatistics }) =>
+          getMyProfileStatistics()
+        )
+        .then((stats) => {
+          const values = {
+            total: stats.total,
+            wins: stats.wins,
+            losses: stats.losses,
+            abandoned: stats.abandoned,
+            draws: stats.draws,
+            winRate: `${stats.winRate}%`,
+            bestScore: numberFormat(stats.bestScore),
+          };
+
+          Object.entries(values).forEach(([key, value]) => {
+            const element = box.querySelector(`[data-stat="${key}"]`);
+            if (element) element.textContent = value;
+          });
+
+          const labels = {
+            fight: "COMBATE",
+            survival: "SUPERVIVENCIA",
+            pvp: "PVP",
+          };
+
+          modeList.innerHTML = "";
+
+          stats.modes.forEach((mode) => {
+            const card = document.createElement("article");
+            card.style.cssText =
+              "padding:12px;border:1px solid #304536;border-radius:8px;background:#101b14;display:grid;gap:6px";
+
+            const heading = document.createElement("strong");
+            heading.textContent = labels[mode.mode] || mode.mode.toUpperCase();
+            heading.style.color = "#9ff58d";
+
+            const details = document.createElement("div");
+            details.style.cssText =
+              "display:flex;flex-wrap:wrap;gap:12px;font-size:12px;color:#cbd8c4";
+
+            [
+              `Partidas: ${numberFormat(mode.played)}`,
+              `Victorias: ${numberFormat(mode.wins)}`,
+              `Derrotas: ${numberFormat(mode.losses)}`,
+              `Abandonos: ${numberFormat(mode.abandoned)}`,
+            ].forEach((text) => {
+              const item = document.createElement("span");
+              item.textContent = text;
+              details.append(item);
+            });
+
+            const best = document.createElement("small");
+            best.style.color = "#a9bcae";
+            best.textContent =
+              `Mejor puntuación: ${numberFormat(mode.bestScore)}`;
+
+            card.append(heading, details, best);
+            modeList.append(card);
+          });
+        })
+        .catch((error) => {
+          modeList.textContent =
+            "No se pudieron cargar las estadísticas. Inténtalo nuevamente.";
+          console.error(
+            "OVERBREAKER: error al cargar estadísticas:",
+            error,
+          );
+        });
+    }
+    if (kind === "history") {
+      title.textContent = "HISTORIAL DE PARTIDAS";
+
+      box.innerHTML = `
+        <div style="padding:12px;color:#d8ffd0">
+          <p data-history-status>Consultando partidas...</p>
+          <div data-history-filters style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0"></div>
+          <div data-history-list style="display:grid;gap:5px"></div>
+        </div>
+      `;
+
+      const status = box.querySelector("[data-history-status]");
+      const filters = box.querySelector("[data-history-filters]");
+      const list = box.querySelector("[data-history-list]");
+
+      if (app.auth?.status !== "ready" || !app.auth.user) {
+        status.textContent =
+          "La cuenta todavía no está disponible. Comprueba la conexión y vuelve a abrir el historial.";
+        return;
+      }
+
+      import("../services/history.js")
+        .then(({ getMyMatchHistory }) => getMyMatchHistory(100))
+        .then((matches) => {
+          if (!matches.length) {
+            status.textContent = "Todavía no hay partidas registradas.";
+            return;
+          }
+
+          const modeLabels = {
+            all: "TODAS",
+            fight: "COMBATE",
+            survival: "SUPERVIVENCIA",
+            pvp: "PVP",
+          };
+
+          const resultLabels = {
+            win: "VICTORIA",
+            loss: "DERROTA",
+            draw: "EMPATE",
+            abandoned: "ABANDONADA",
+          };
+
+          const resultColors = {
+            win: "#72e69a",
+            loss: "#ff7777",
+            draw: "#f2d477",
+            abandoned: "#eab96b",
+          };
+
+          let selectedMode = "all";
+
+          function renderHistory() {
+            const visibleMatches = selectedMode === "all"
+              ? matches
+              : matches.filter((match) => match.game_mode === selectedMode);
+
+            status.textContent =
+              `${visibleMatches.length} de ${matches.length} partidas`;
+
+            list.innerHTML = "";
+
+            if (!visibleMatches.length) {
+              list.textContent = "No hay partidas registradas en este modo.";
+              return;
+            }
+
+            visibleMatches.forEach((match) => {
+              const card = document.createElement("article");
+              card.style.cssText =
+                "padding:8px 10px;border:1px solid #304536;border-radius:7px;background:#101b14;display:grid;gap:4px";
+
+              const header = document.createElement("div");
+              header.style.cssText =
+                "display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:12px";
+
+              const mode = document.createElement("strong");
+              mode.textContent = modeLabels[match.game_mode] || "PARTIDA";
+
+              const result = document.createElement("strong");
+              result.textContent =
+                resultLabels[match.result] || match.result.toUpperCase();
+              result.style.color = resultColors[match.result] || "#ffffff";
+
+              header.append(mode, result);
+
+              const score = document.createElement("div");
+              score.style.cssText =
+                "font-size:17px;font-weight:bold;color:#ffffff";
+              score.textContent =
+                `${Number(match.score || 0).toLocaleString("es-CL")} PUNTOS`;
+
+              const duration = Math.max(
+                0,
+                Math.floor(Number(match.duration_seconds) || 0),
+              );
+              const minutes = Math.floor(duration / 60);
+              const seconds = String(duration % 60).padStart(2, "0");
+
+              const date = new Date(match.created_at);
+              const dateText = Number.isNaN(date.getTime())
+                ? "Fecha no disponible"
+                : date.toLocaleString("es-CL");
+
+              const details = document.createElement("small");
+              details.style.cssText = "color:#a9bcae;font-size:11px";
+              details.textContent =
+                `${dateText} · Duración: ${minutes}:${seconds}`;
+
+              card.append(header, score, details);
+              list.append(card);
+            });
+          }
+
+          Object.entries(modeLabels).forEach(([mode, label]) => {
+            const button = document.createElement("button");
+            button.type = "button";
+            button.textContent = label;
+            button.style.cssText =
+              "padding:7px 10px;border:1px solid #42634a;border-radius:6px;background:#17251b;color:#d8ffd0;font-size:11px;font-weight:bold;cursor:pointer";
+
+            button.addEventListener("click", () => {
+              selectedMode = mode;
+
+              filters.querySelectorAll("button").forEach((item) => {
+                item.style.background =
+                  item === button ? "#315d3c" : "#17251b";
+                item.style.borderColor =
+                  item === button ? "#72e69a" : "#42634a";
+              });
+
+              renderHistory();
+            });
+
+            filters.append(button);
+          });
+
+          filters.querySelector("button").click();
+        })
+        .catch((error) => {
+          status.textContent =
+            "No se pudo cargar el historial. Inténtalo nuevamente.";
+          console.error("OVERBREAKER: error al cargar el historial:", error);
+        });
+
+      return;
     }
   };
   return function initialize() {
