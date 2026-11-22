@@ -15,6 +15,13 @@ export const PLAYER_KEYS = {
   k: { kind: "parry" },
   l: { kind: "dodge" },
   m: { kind: "move" },
+  g: { kind: "state", state: "pose1" },
+  h: { kind: "state", state: "adren" },
+  t: { kind: "state", state: "tired" },
+  v: { kind: "state", state: "win" },
+  x: { kind: "state", state: "down" },
+  z: { kind: "state", state: "getup" },
+  r: { kind: "reset" },
 };
 export const RIVAL_KEYS = {
   7: { kind: "attack", lane: 0 },
@@ -46,6 +53,7 @@ export function createPractice() {
     player,
     rival,
     speed: 1,
+    perfect: false,
     last: "",
     queue: [],
     sparks: [],
@@ -62,9 +70,11 @@ export function createPractice() {
     f.tr.length = 0;
     return true;
   };
-  state.setColor = (hex, dark) => {
+  state.setColor = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return false;
     player.col = hex;
-    player.dk = dark;
+    player.dk = app.darken(hex);
+    return true;
   };
   // Nombres de las teclas para el estilo actual del luchador.
   state.labels = (side) => {
@@ -75,13 +85,19 @@ export function createPractice() {
       parry: style.labels.parry,
       dodge: style.dodge ? style.labels.dodge : null,
       move: style.move ? style.labels.move : null,
+      states: style.labels.states || {},
+      reset: "REINICIAR",
     };
   };
+
+  const other = (side) => fighter(side === "p" ? "e" : "p");
+  const spark = (delay, side, color, guard) =>
+    state.sparks.push({ at: delay, age: 0, side, color, guard });
 
   // Ejecuta una acción como si el combate ya la hubiera validado.
   state.perform = (side, action) => {
     const actor = fighter(side),
-      target = fighter(side === "p" ? "e" : "p");
+      target = other(side);
     const style = app.STYLES[actor.style];
     if (action.kind === "attack") {
       actor.an = app.MOVES[action.lane];
@@ -91,20 +107,69 @@ export function createPractice() {
       if (target.an === "block" || target.an === "parry") return true;
       const delay = app.impactDelay(actor);
       app.scheduleReaction(target, app.reactionAnimation(target, action.lane), delay);
-      state.sparks.push({ at: delay, age: 0, side: side === "p" ? "e" : "p", color: style.color });
+      spark(delay, side === "p" ? "e" : "p", style.color, false);
       return true;
     }
-    if (action.kind === "dodge" || action.kind === "move") {
-      if (!style[action.kind]) return false;
-      actor.an = style[action.kind];
-      actor.at = 0;
-      state.last = style.labels[action.kind];
+    if (["block", "parry", "dodge", "move"].includes(action.kind)) {
+      const name = action.kind === "dodge" || action.kind === "move" ? style[action.kind] : action.kind;
+      if (!name) return false;
+      // Las defensas siempre responden a una acción enemiga: el rival ataca y su
+      // golpe conecta justo después, igual que en el combate.
+      const attackName = action.kind === "block" ? "punch" : "kick";
+      const enemyDelay = app.impactDelayOf(target, attackName);
+      const lead = enemyDelay - app.ENEMY_IMPACT_OFFSET;
+      const perfect = state.perfect && (action.kind === "block" || action.kind === "parry");
+      const defend = () => {
+        actor.an = perfect ? app.defenseAnimation(actor, action.kind, true) : name;
+        actor.at = 0;
+        if (perfect && (actor.an === "blockC" || actor.an === "parryC"))
+          app.scheduleReaction(
+            target,
+            action.kind === "parry" ? "stun" : app.reactionAnimation(target, 0),
+            app.impactDelay(actor),
+          );
+      };
+      const attack = () => {
+        target.an = attackName;
+        target.at = 0;
+      };
+      const counter = perfect && app.defenseAnimation(actor, action.kind, true) !== action.kind;
+      if (counter) {
+        // Defensa perfecta: el rival no completa su golpe; conserva su preparación
+        // hasta que el contraataque lo alcanza.
+        target.an = attackName === "punch" ? "windP" : "windK";
+        target.at = 0;
+        defend();
+        spark(app.impactDelay(actor), side === "p" ? "e" : "p", style.color, false);
+      } else {
+        if (lead > 0) {
+          attack();
+          app.later(lead, defend);
+        } else {
+          defend();
+          app.later(-lead, attack);
+        }
+        spark(lead > 0 ? enemyDelay : app.ENEMY_IMPACT_OFFSET, side, "#9b8cff", true);
+      }
+      state.last = style.labels[action.kind === "block" || action.kind === "parry" ? action.kind : action.kind] + (perfect ? " PERFECTA" : "");
       return true;
     }
-    actor.an = action.kind;
-    actor.at = 0;
-    state.last = style.labels[action.kind];
-    return true;
+    if (action.kind === "state") {
+      if (!app.playState(actor, action.state)) return false;
+      state.last = (style.labels.states && style.labels.states[action.state]) || action.state;
+      return true;
+    }
+    if (action.kind === "reset") {
+      for (const f of [player, rival]) {
+        f.an = "idle";
+        f.at = 0;
+      }
+      state.sparks.length = 0;
+      app.pending.length = 0;
+      state.last = "";
+      return true;
+    }
+    return false;
   };
 
   // Secuencia de demostración: golpes encadenados cada `gap` segundos.
@@ -124,6 +189,7 @@ export function createPractice() {
     }
     app.stepFighter(player, fd, dt);
     app.stepFighter(rival, fd, dt);
+    app.runLater(fd);
     for (const spark of state.sparks) spark.at -= fd;
     for (const spark of state.sparks) if (spark.at <= 0) spark.age += fd;
     state.sparks = state.sparks.filter((spark) => spark.age < 0.22);
@@ -149,9 +215,11 @@ export function createPractice() {
     for (const spark of state.sparks) {
       if (spark.at > 0) continue;
       const target = fighter(spark.side),
-        k = spark.age / 0.22,
-        x = target.x + target.face * (target.q.hx - 10) * s,
-        y = gy - 36 * s;
+        k = spark.age / 0.22;
+      // La chispa sale sobre el cuerpo dibujado (cabeza), o delante de los guantes
+      // cuando es una defensa.
+      let [x, y] = app.bodyPoint(target, "head", gy, s);
+      if (spark.guard) x += target.face * 22 * s;
       g.strokeStyle = spark.color;
       g.globalAlpha = 1 - k;
       g.lineWidth = 4 * s * (1 - k);

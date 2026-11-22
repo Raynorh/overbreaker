@@ -1150,7 +1150,7 @@ export function install(app) {
       "#c05cff",
     ];
     app.DM = {
-      p: app.mkF(1, app.playerColor, "#173d12"),
+      p: app.mkF(1, app.playerColor, app.darken(app.playerColor)),
       e: app.mkF(-1, "#ff5c7a", "#b03050"),
       t: 0.5,
       turn: 0,

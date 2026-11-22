@@ -1,6 +1,6 @@
 import { createBoxingStyle } from "./styles/boxing.js";
 import { createTaekwondoStyle } from "./styles/taekwondo.js";
-import { createBoxeadorStyle, spriteFrame } from "./styles/boxeador.js";
+import { createBoxeadorStyle } from "./styles/boxeador.js";
 
 // Installs this system into one application instance; initialization is deferred.
 export function install(app) {
@@ -66,6 +66,16 @@ export function install(app) {
     o.rot = f.an === "flip" ? -p * 6.283 : 0;
     return o;
   };
+  // Versión oscura de un color (para los miembros traseros y los bordes).
+  app.darken = function darken(hex, k = 0.45) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return "#173d12";
+    return (
+      "#" +
+      [1, 3, 5]
+        .map((i) => Math.round(parseInt(hex.slice(i, i + 2), 16) * k).toString(16).padStart(2, "0"))
+        .join("")
+    );
+  };
   // Avanza un luchador un fotograma: tiempo de animación, destello, reacción
   // pendiente y resorte. `fd` es el tiempo visual y `dt` el real.
   app.stepFighter = function stepFighter(f, fd, dt) {
@@ -90,10 +100,70 @@ export function install(app) {
     const style = app.STYLES[f.style];
     return style && style.flash !== undefined ? style.flash : 0.18;
   };
+  // Segundos después del instante de la nota (o de pulsar la defensa) en que el golpe
+  // del rival conecta. Cae dentro de la ventana de defensa.
+  app.ENEMY_IMPACT_OFFSET = 0.09;
   // Segundos que tarda el golpe en conectar desde que arranca su animación.
-  app.impactDelay = function impactDelay(attacker) {
-    const A = app.animation(attacker);
+  app.impactDelayOf = function impactDelayOf(f, an) {
+    const style = app.STYLES[f.style];
+    const A = app.AN[(style && style.alias[an]) || an];
     return A && A[3] && A[3].impact ? A[0] * A[3].impact : 0;
+  };
+  app.impactDelay = function impactDelay(attacker) {
+    return app.impactDelayOf(attacker, attacker.an);
+  };
+  // Cola de efectos que deben ocurrir en el instante del impacto (chispas, sonido,
+  // sacudida). Avanza con el tiempo visual, así que respeta la pausa.
+  app.pending = [];
+  app.later = function later(delay, fn) {
+    if (!(delay > 0)) return fn();
+    app.pending.push({ t: delay, fn });
+  };
+  app.runLater = function runLater(fd) {
+    if (!app.pending.length) return;
+    const due = [];
+    app.pending = app.pending.filter((item) => {
+      item.t -= fd;
+      if (item.t > 0) return true;
+      due.push(item);
+      return false;
+    });
+    for (const item of due) item.fn();
+  };
+  // Pone un estado puntual (adrenalina, cansancio, victoria...) solo si el estilo
+  // del luchador tiene animación para él; si no, no cambia nada.
+  app.playState = function playState(f, name) {
+    const style = app.STYLES[f.style];
+    if (!style || !style.alias[name]) return false;
+    f.an = name;
+    f.at = 0;
+    return true;
+  };
+  // Defensa a mostrar: la perfecta usa el contraataque del estilo si lo tiene.
+  app.defenseAnimation = function defenseAnimation(f, kind, perfect) {
+    const style = app.STYLES[f.style];
+    const counter = kind === "block" ? "blockC" : "parryC";
+    return perfect && style && style.alias[counter] ? counter : kind;
+  };
+  // Punto del cuerpo ("head" o "torso") en pantalla, para colocar impactos y chispas
+  // sobre el luchador y no en el aire. `gy` y `s` son el suelo y la escala del dibujo.
+  app.bodyPoint = function bodyPoint(f, part, gy, s) {
+    const style = app.STYLES[f.style];
+    if (style && style.sprite) {
+      const name = app.animationName(f),
+        clip = style.sprite.clips[name] || style.sprite.clips.gif_idle;
+      const point = style.sprite.frameAt(clip, f.at)[part === "torso" ? "torso" : "head"];
+      const k = (100 * s) / style.sprite.manifest.height;
+      const shift = style.sprite.shiftAt(name, f.at) * s;
+      return [f.x + f.face * (point[0] * k + shift), gy - 2 * s + point[1] * k];
+    }
+    return [f.x, gy - (part === "torso" ? 55 : 85) * s];
+  };
+  // Punto de impacto de un golpe del carril indicado sobre el luchador `f`.
+  app.hitPoint = function hitPoint(f, lane, gy, s) {
+    const style = app.STYLES[f.style];
+    const part = (style && style.hitTargets && style.hitTargets[lane]) || "head";
+    return app.bodyPoint(f, part, gy, s);
   };
   // Programa la reacción del rival para el momento del impacto.
   app.scheduleReaction = function scheduleReaction(target, an, delay) {
@@ -249,9 +319,8 @@ export function install(app) {
       const name = app.animationName(f),
         clip = style.sprite.clips[name] || style.sprite.clips.gif_idle;
       style.sprite.sheets.draw(g, {
-        row: clip.row,
-        column: spriteFrame(clip, f.at),
-        x: f.x,
+        frame: style.sprite.frameAt(clip, f.at),
+        x: f.x + f.face * style.sprite.shiftAt(name, f.at) * s,
         y: gy - 2 * s,
         scale: (100 * s) / style.sprite.manifest.height,
         face: f.face,

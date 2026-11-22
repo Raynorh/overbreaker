@@ -1,5 +1,9 @@
 import { DIFFICULTY } from "./config.js";
 // Installs this system into one application instance; initialization is deferred.
+// Ráfaga final del Ultra Combo: cantidad de golpes automáticos y segundos entre ellos.
+const FRENZY_HITS = 22;
+const FRENZY_GAP = 0.065;
+
 export function install(app) {
 
   // Registra una partida en el historial de Supabase.
@@ -60,6 +64,7 @@ export function install(app) {
     app.startRound();
   };
   app.startRound = function startRound() {
+    app.pending.length = 0;
     app.DIV = 3;
     app.$("breakerBtn").classList.remove("show");
     app.$("ultraBtn").classList.remove("show");
@@ -68,7 +73,7 @@ export function install(app) {
       time: 60,
       prot: 100,
       lastProtHit: -9,
-      p: app.mkF(1, app.playerColor, "#173d12"),
+      p: app.mkF(1, app.playerColor, app.darken(app.playerColor)),
       e: app.mkF(-1, "#ff5c7a", "#b03050"),
       en: 100,
       ex: 0,
@@ -318,14 +323,22 @@ export function install(app) {
       26,
     );
   };
+  // Un golpe de la ráfaga final: animación (ya en su cuadro de impacto), reacción
+  // del rival, chispa sobre su cuerpo y sonido de golpe potente.
+  app.finStrike = function finStrike(l, intensity, color, sparks) {
+    app.R.p.an = app.MOVES[l];
+    app.R.p.at = app.impactDelay(app.R.p);
+    app.scheduleReaction(app.R.e, app.reactionAnimation(app.R.e, l), 0);
+    app.shake = Math.max(app.shake, intensity);
+    const [x, y] = app.hitPoint(app.R.e, l, app.gy(), app.sc());
+    app.events.emit("spark", x, y, color, sparks, 260);
+    app.events.emit("sound:hit", l, true, 99, true);
+  };
   app.finPress = function finPress(l) {
     const F = app.R.fin;
-    if (F.ready) {
-      if (l === (F.remateLane ?? -1) && app.R.t <= F.deadline)
-        app.completeUltra();
-      else app.failUltra();
-      return;
-    }
+    // La fase final es automática: ninguna tecla puede interrumpirla.
+    if (F.frenzy || F.ready) return;
+    // Durante el Ultra no cae ninguna defensa: las teclas defensivas no hacen nada.
     if (l > 3) return;
     let b = null,
       bd = 9;
@@ -337,7 +350,11 @@ export function install(app) {
           b = n;
         }
       }
-    if (!b || bd > 0.16) return;
+    if (!b || bd > 0.16) {
+      // Pulsar libremente está permitido: golpe visible, sin puntos y sin castigo.
+      app.finStrike(l, 0.1, "#dfff55", 5);
+      return;
+    }
     b.done = 1;
     F.hit++;
     app.R.cb++;
@@ -346,21 +363,40 @@ export function install(app) {
     app.M.maxC = Math.max(app.M.maxC, app.R.cb);
     app.events.emit("sound:swing", l);
     app.R.p.an = app.MOVES[l];
-    app.R.p.at = 0;
-    app.R.e.an = "hurt";
-    app.R.e.at = 0;
-    app.R.e.fl = 0.08;
+    app.R.p.at = app.impactDelay(app.R.p);
+    app.scheduleReaction(app.R.e, app.reactionAnimation(app.R.e, l), 0);
     app.shake = Math.max(app.shake, 0.12 + (F.hit / F.tot) * 0.25);
-    app.events.emit(
-      "spark",
-      app.eX(),
-      app.gy() - 70 * app.sc(),
-      F.hit > F.tot * 0.6 ? "#fff" : "#dfff55",
-      6 + (F.hit >> 1),
-      260,
-    );
+    {
+      const [x, y] = app.hitPoint(app.R.e, l, app.gy(), app.sc());
+      app.events.emit("spark", x, y, F.hit > F.tot * 0.6 ? "#fff" : "#dfff55", 6 + (F.hit >> 1), 260);
+    }
     app.events.emit("sound:hit", l, P, 99, b.T < 0.6);
     if (P) app.events.emit("sound:perf");
+  };
+  // Ráfaga final: golpes automáticos muy rápidos con sonidos potentes y nada más.
+  app.startFrenzy = function startFrenzy() {
+    const F = app.R.fin;
+    app.R.notes = [];
+    F.frenzy = { next: 0.12, hits: 0, end: 0 };
+    app.events.emit("pop", app.W / 2, app.HY() - 135, "¡REMATE!", "#ffc36b", 22);
+  };
+  app.frenzyUpdate = function frenzyUpdate(dt) {
+    const F = app.R.fin,
+      Z = F.frenzy;
+    if (Z.hits < FRENZY_HITS) {
+      Z.next -= dt;
+      while (Z.next <= 0 && Z.hits < FRENZY_HITS) {
+        app.finStrike(Z.hits % 4, 0.3 + (Z.hits / FRENZY_HITS) * 0.6, Z.hits % 2 ? "#fff" : "#dfff55", 12);
+        Z.hits++;
+        Z.next += FRENZY_GAP;
+      }
+    } else {
+      Z.end += dt;
+      if (Z.end > 0.2) {
+        F.ready = 1;
+        app.completeUltra();
+      }
+    }
   };
   app.failUltra = function failUltra() {
     const F = app.R && app.R.fin;
@@ -428,53 +464,21 @@ export function install(app) {
         );
       }
     }
-    if (!F.ready) {
+    if (!F.frenzy && !F.ready) {
       if (!app.custom && app.R.t >= F.mn) {
         app.music(F.ms++);
         F.mn += 0.25;
       }
+      // Una nota fallada no interrumpe la ráfaga: solo cuenta como fallo.
       for (const n of app.R.notes)
         if (!n.done && app.R.t - n.t > 0.16) {
           n.done = 1;
           F.miss++;
-          app.events.emit("sound:miss");
-          app.R.jt = { s: "MISS", c: "#ff6478", l: 0.5 };
-          app.failUltra();
-          return;
         }
       app.R.notes = app.R.notes.filter((n) => app.R.t - n.t < 0.48);
-      if (app.R.notes.every((n) => n.done)) {
-        F.ready = 1;
-        F.deadline = app.R.t + 1.15;
-        F.remateLane = Math.floor(Math.random() * 4);
-        F.remateT = app.R.t;
-        const el = app.$("ultraBtn");
-        el.textContent = "KO";
-        el.classList.add("show");
-        app.events.emit(
-          "pop",
-          app.W / 2,
-          app.HY() - 135,
-          "¡REMATE!",
-          "#ffc36b",
-          22,
-        );
-      } else if (app.R.t > F.t0 + 15) {
-        app.failUltra();
-      }
-    } else if (F.ready && !F.st) {
-      const el = app.$("ultraBtn"),
-        lane = F.remateLane ?? 1,
-        progress = Math.max(
-          0,
-          Math.min(
-            1,
-            (app.R.t - F.remateT) / Math.max(0.01, F.deadline - F.remateT),
-          ),
-        );
-      el.style.left = app.LX() + lane * app.LW() + app.LW() / 2 - 27 + "px";
-      el.style.top = app.LT() + progress * (app.HY() - app.LT()) - 27 + "px";
-      if (app.R.t > F.deadline) app.failUltra();
+      if (app.R.notes.every((n) => n.done) || app.R.t > F.t0 + 15) app.startFrenzy();
+    } else if (F.frenzy && !F.st) {
+      app.frenzyUpdate(dt);
     }
     if (F.st) {
       F.d += dt;
@@ -660,14 +664,10 @@ export function install(app) {
       "#ff5c7a",
       22,
     );
-    app.events.emit(
-      "spark",
-      app.pX(),
-      app.gy() - 70 * app.sc(),
-      "#ff5c7a",
-      12,
-      260,
-    );
+    {
+      const [x, y] = app.hitPoint(app.R.p, 0, app.gy(), app.sc());
+      app.events.emit("spark", x, y, "#ff5c7a", 12, 260);
+    }
     app.events.emit("sound:hurt", d);
   };
   app.hitE = function hitE(d, i, P) {
@@ -694,24 +694,25 @@ export function install(app) {
         app.reactionAnimation(app.R.e, i),
         app.impactDelay(app.R.p),
       );
-    app.shake = Math.max(app.shake, 0.18 + d * 0.035);
-    app.events.emit(
-      "pop",
-      app.eX(),
-      app.py(),
-      Math.round(d),
-      app.R.adr > 0 ? "#ff9a1f" : "#ffd23f",
-      16 + Math.min(20, d * 2.5),
-    );
-    app.events.emit(
-      "spark",
-      app.eX(),
-      app.gy() - 70 * app.sc(),
-      app.R.adr > 0 ? "#ff9a1f" : "#ffd23f",
-      8 + Math.round(d * 2),
-      240 + d * 30,
-    );
-    app.events.emit("sound:hit", i === undefined ? 0 : i, P, app.R.cb);
+    // Chispas, número, sacudida y sonido ocurren cuando el golpe conecta y sobre el
+    // cuerpo del rival (cabeza o torso según el golpe), no al pulsar la tecla.
+    const adr = app.R.adr > 0,
+      combo = app.R.cb;
+    app.later(app.impactDelay(app.R.p), () => {
+      if (!app.R) return;
+      const [x, y] = app.hitPoint(app.R.e, i === undefined ? 0 : i, app.gy(), app.sc());
+      app.shake = Math.max(app.shake, 0.18 + d * 0.035);
+      app.events.emit(
+        "pop",
+        app.eX(),
+        app.py(),
+        Math.round(d),
+        adr ? "#ff9a1f" : "#ffd23f",
+        16 + Math.min(20, d * 2.5),
+      );
+      app.events.emit("spark", x, y, adr ? "#ff9a1f" : "#ffd23f", 8 + Math.round(d * 2), 240 + d * 30);
+      app.events.emit("sound:hit", i === undefined ? 0 : i, P, combo);
+    });
   };
   app.ok = function ok(q, pts, ch) {
     const P = q === "PERFECT";
@@ -782,19 +783,21 @@ export function install(app) {
     app.ok(q, 60, 1);
     app.R.p.hp = Math.min(100, app.R.p.hp + (P ? 2 : 0.8));
     app.R.en = Math.min(100, app.R.en + 6);
-    app.R.p.an = "block";
+    app.R.p.an = app.defenseAnimation(app.R.p, "block", P);
     app.R.p.at = 0;
+    // La defensa perfecta contraataca: el rival reacciona (solo presentación) cuando
+    // el golpe del contraataque conecta.
+    if (app.R.p.an === "blockC") {
+      app.scheduleReaction(app.R.e, app.reactionAnimation(app.R.e, 0), app.impactDelay(app.R.p));
+      b.cr = 1; // el contraataque lo golpea antes: el rival no completa su ataque
+    }
     app.R.lastA = "def";
     app.R.lastT = app.R.t;
     app.events.emit("sound:block", P);
-    app.events.emit(
-      "spark",
-      app.pX() + 30 * app.sc(),
-      app.gy() - 70 * app.sc(),
-      "#9b8cff",
-      8,
-      180,
-    );
+    {
+      const [x, y] = app.bodyPoint(app.R.p, "head", app.gy(), app.sc());
+      app.events.emit("spark", x + app.R.p.face * 22 * app.sc(), y, "#9b8cff", 8, 180);
+    }
   };
   app.par = function par(q, b) {
     app.ecb();
@@ -810,24 +813,25 @@ export function install(app) {
     const c = app.R.lastA === "con" && app.stance() === "con";
     app.ok(q, 90, P ? (c ? 18 : 12) : 5);
     app.R.p.hp = Math.min(100, app.R.p.hp + (P ? 3.5 : 2));
-    app.R.p.an = "parry";
+    app.R.p.an = app.defenseAnimation(app.R.p, "parry", P);
     app.R.p.at = 0;
     if (P) {
-      app.R.e.an = "stun";
-      app.R.e.at = 0;
+      if (app.R.p.an === "parryC") {
+        app.scheduleReaction(app.R.e, "stun", app.impactDelay(app.R.p));
+        b.cr = 1;
+      } else {
+        app.R.e.an = "stun";
+        app.R.e.at = 0;
+      }
       b.pr = 1;
     }
     app.R.lastA = "con";
     app.R.lastT = app.R.t;
     app.events.emit("sound:parry", P);
-    app.events.emit(
-      "spark",
-      app.pX() + 30 * app.sc(),
-      app.gy() - 80 * app.sc(),
-      "#ff7bd5",
-      10,
-      200,
-    );
+    {
+      const [x, y] = app.bodyPoint(app.R.p, "head", app.gy(), app.sc());
+      app.events.emit("spark", x + app.R.p.face * 22 * app.sc(), y, "#ff7bd5", 10, 200);
+    }
   };
   app.miss = function miss(n) {
     if (n.brk) {
@@ -892,6 +896,7 @@ export function install(app) {
       app.R.adr = 6;
       app.R.ac = 1;
       app.R.am = 0;
+      app.playState(app.R.p, "adren");
       app.R.pr = 0;
       app.R.rdy = 0;
       app.events.emit(
@@ -926,7 +931,16 @@ export function install(app) {
       "#ff6478",
       14,
     );
-    app.osc(105, 62, 0.08, 0.13, "sawtooth");
+    // Si pulsas un ataque mientras el rival también ataca, los golpes chocan: suena una
+    // explosión de impactos fuertes en lugar del zumbido de error.
+    const enemyAttacking = app.R.notes.some(
+      (n) => (n.l > 3 || n.role === "def") && !n.done && n.t - app.R.t < 0.5 && app.R.t - n.t < 0.2,
+    );
+    if (l <= 3 && enemyAttacking) {
+      app.events.emit("sound:clash");
+      app.events.emit("spark", (app.pX() + app.eX()) / 2, app.gy() - 75 * app.sc(), "#fff3b0", 18, 300);
+      app.shake = Math.max(app.shake, 0.3);
+    } else app.osc(105, 62, 0.08, 0.13, "sawtooth");
     if (
       app.R.ai &&
       !app.R.notes.some((n) => n.ai && !n.done) &&
@@ -1024,6 +1038,7 @@ export function install(app) {
     if (win) app.M.score += Math.round(app.R.p.hp * 5 + app.R.p.bars * 300);
     (win ? app.R.e : app.R.p).an = "down";
     (win ? app.R.e : app.R.p).at = 0;
+    app.playState(win ? app.R.p : app.R.e, "win");
     app.events.emit("sound:ko");
     app.shake = Math.max(app.shake, 0.85);
     app.slow = 0.55;
@@ -1209,13 +1224,23 @@ export function install(app) {
           app.R.e.an = pu ? "windP" : "windK";
           app.R.e.at = 0;
         }
-        if (!n.s && app.R.t >= n.t - 0.04) {
+        // El golpe del rival conecta justo después del instante de la nota, para que
+        // lo que ves coincida con el momento de defender.
+        if (
+          !n.s &&
+          app.R.t >=
+            n.t + app.ENEMY_IMPACT_OFFSET - app.impactDelayOf(app.R.e, pu ? "punch" : "kick")
+        ) {
           n.s = 1;
           app.R.lastEnemyAtk = app.R.t;
-          if (n.pr) {
-            app.R.e.an = "stun";
-          } else app.R.e.an = pu ? "punch" : "kick";
-          app.R.e.at = 0;
+          if (n.cr) {
+            // Defensa perfecta con contraataque: su golpe nunca llega; conserva su
+            // preparación hasta que la reacción programada lo alcance.
+          } else {
+            if (n.pr) app.R.e.an = "stun";
+            else app.R.e.an = pu ? "punch" : "kick";
+            app.R.e.at = 0;
+          }
         }
       }
       if (!n.done && app.R.t - n.t > 0.14) {
@@ -1253,7 +1278,12 @@ export function install(app) {
       );
     if (app.R.ex > 0) {
       app.R.ex -= dt;
-      if (app.R.ex <= 0) app.R.en = 35;
+      // Jadeo mientras dura el agotamiento (si el estilo tiene esa pose).
+      if (app.R.p.an === "idle") app.playState(app.R.p, "tired");
+      if (app.R.ex <= 0) {
+        app.R.en = 35;
+        if (app.R.p.an === "tired") app.R.p.an = "idle";
+      }
     } else
       app.R.en = Math.min(
         100,

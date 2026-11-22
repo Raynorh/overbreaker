@@ -50,6 +50,7 @@ export function install(app) {
       app.R.p.sb = app.SB[app.stance()] || {};
     }
     for (const f of fs) app.stepFighter(f, fd, dt);
+    app.runLater(fd);
     for (const f of app.fx) {
       f.l -= pd;
       f.y = (f.y || app.AH * 0.3) - pd * 40;

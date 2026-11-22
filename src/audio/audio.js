@@ -526,6 +526,16 @@ export function install(app) {
         }
         if (i === 1) app.osc(110, 35, 0.18, 0.7, "sine", d);
       },
+      // Choque de golpes: varias explosiones de impactos fuertes seguidas.
+      clash() {
+        [0, 0.045, 0.1].forEach((d, i) => {
+          app.osc(150 - i * 22, 38, 0.2, 1, "sine", d);
+          app.osc(900, 100, 0.06, 0.35, "square", d);
+          app.nz(3800, 200, 0.14, 0.95, "lowpass", 0.7, d);
+        });
+        app.osc(70, 22, 0.5, 1.2, "sine", 0.1);
+        app.nz(1800, 70, 0.4, 0.9, "lowpass", 0.7, 0.1);
+      },
       block(P) {
         if (app.sDef("blk", P)) return;
         app.osc(130, 55, 0.1, 0.6);

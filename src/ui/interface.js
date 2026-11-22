@@ -13,7 +13,7 @@ export function install(app) {
     const c = app.$("stickPrev");
     if (!c) return;
     const x = c.getContext("2d");
-    app.PV.p = app.mkF(1, app.playerColor, "#173d12");
+    app.PV.p = app.mkF(1, app.playerColor, app.darken(app.playerColor));
     app.PV.e = app.mkF(-1, "#ff5c7a", "#b03050");
     app.PV.t = 0.3;
     app.PV.turn = 0;
@@ -24,32 +24,31 @@ export function install(app) {
       const dt = Math.min(0.05, (t - last) / 1000);
       last = t;
       app.PV.p.col = app.playerColor;
+      app.PV.p.dk = app.darken(app.playerColor);
       app.PV.t -= dt;
       if (app.PV.t <= 0) {
         app.PV.t = 0.9 + Math.random() * 0.4;
         const a = app.PV.turn++ % 2 ? app.PV.e : app.PV.p,
           d = a === app.PV.p ? app.PV.e : app.PV.p;
-        a.an = app.MOVES[Math.floor(Math.random() * 4)];
+        const lane = Math.floor(Math.random() * 4);
+        a.an = app.MOVES[lane];
         a.at = 0;
-        app.PV.d = 0.12;
+        // El rival reacciona (o se cubre) cuando el golpe conecta.
+        app.PV.d = app.impactDelay(a) || 0.01;
         app.PV.def = d;
+        app.PV.lane = lane;
         app.PV.dm = Math.random() < 0.5 ? "hurt" : "block";
       }
       if (app.PV.d > 0) {
         app.PV.d -= dt;
         if (app.PV.d <= 0) {
-          app.PV.def.an = app.PV.dm;
+          app.PV.def.an =
+            app.PV.dm === "hurt" ? app.reactionAnimation(app.PV.def, app.PV.lane) : "block";
           app.PV.def.at = 0;
-          app.PV.def.fl = app.PV.dm === "hurt" ? 0.1 : 0;
+          app.PV.def.fl = app.PV.dm === "hurt" ? app.flashTime(app.PV.def) : 0;
         }
       }
-      for (const f of [app.PV.p, app.PV.e]) {
-        f.at += dt;
-        if (f.fl > 0) f.fl -= dt;
-        const A = app.AN[f.an];
-        if (A && !A[2] && f.at >= A[0]) f.an = "idle";
-        app.spring(f, dt);
-      }
+      for (const f of [app.PV.p, app.PV.e]) app.stepFighter(f, dt, dt);
       {
         x.clearRect(0, 0, 320, 170);
         const s = 1.15,
@@ -70,6 +69,14 @@ export function install(app) {
     if (!c) return;
     const x = c.getContext("2d"),
       t0 = performance.now();
+    // Los mismos luchadores del juego (estilo y color reales), no dibujos aparte.
+    const AV = {
+      p: app.mkF(1, app.playerColor, app.darken(app.playerColor)),
+      e: app.mkF(-1, "#ff5c7a", "#b03050"),
+      last: t0,
+      next: 1.2,
+      turn: 0,
+    };
     const loop = () => {
       if (
         !c.isConnected ||
@@ -122,27 +129,26 @@ export function install(app) {
           x.restore();
         }
       }
-      for (const [fx0, col, dir] of [
-        [w * 0.38, "#69ff36", 1],
-        [w * 0.62, "#ff5c7a", -1],
-      ]) {
-        x.strokeStyle = col;
-        x.lineWidth = 3;
-        x.lineCap = "round";
-        const by = h * 0.78,
-          sw = Math.sin(t * 4 + dir) * 4;
-        x.beginPath();
-        x.arc(fx0, by - 46, 6, 0, 6.28);
-        x.stroke();
-        x.beginPath();
-        x.moveTo(fx0, by - 40);
-        x.lineTo(fx0, by - 18);
-        x.lineTo(fx0 - 6, by);
-        x.moveTo(fx0, by - 18);
-        x.lineTo(fx0 + 6, by);
-        x.moveTo(fx0, by - 34);
-        x.lineTo(fx0 + dir * (12 + sw), by - 30);
-        x.stroke();
+      {
+        const now = performance.now(),
+          dt = Math.min(0.05, (now - AV.last) / 1000);
+        AV.last = now;
+        AV.p.col = app.playerColor;
+        AV.p.dk = app.darken(app.playerColor);
+        AV.next -= dt;
+        if (AV.next <= 0) {
+          AV.next = 1.6;
+          const attacker = AV.turn++ % 2 ? AV.e : AV.p;
+          attacker.an = app.MOVES[Math.floor(Math.random() * 4)];
+          attacker.at = 0;
+        }
+        for (const f of [AV.p, AV.e]) app.stepFighter(f, dt, dt);
+        const s = Math.max(0.45, h / 175),
+          gy = h * 0.78;
+        AV.p.x = w / 2 - 48 * s;
+        AV.e.x = w / 2 + 48 * s;
+        app.drawF(AV.e, 0, gy, s, x);
+        app.drawF(AV.p, 0, gy, s, x);
       }
       requestAnimationFrame(loop);
     };
@@ -698,23 +704,34 @@ export function install(app) {
           '"></button>',
       )
       .join("");
-    app.$("swatches").addEventListener("click", (e) => {
-      const b = e.target.closest("[data-color]");
-      if (!b) return;
-      app.playerColor = b.dataset.color;
-      app.$("stickPreview").style.setProperty("--stick", app.playerColor);
-      app.$("colorPreviewName").textContent =
-        "Vista previa: " + app.playerColor;
+    // Cambia el color del luchador desde las muestras o desde el selector libre.
+    app.setPlayerColor = function setPlayerColor(color) {
+      if (!/^#[0-9a-f]{6}$/i.test(color)) return false;
+      app.playerColor = color;
+      app.$("stickPreview").style.setProperty("--stick", color);
+      app.$("colorPreviewName").textContent = "Vista previa: " + color;
+      const pick = app.$("colorPick");
+      if (pick) pick.value = color;
       try {
-        localStorage.ob_color = app.playerColor;
+        localStorage.ob_color = color;
       } catch (_) {}
       if (app.R && app.R.p) {
-        app.R.p.col = app.playerColor;
-        app.R.p.dk = "#173d12";
+        app.R.p.col = color;
+        app.R.p.dk = app.darken(color);
       }
-      app.DM.p.col = app.playerColor;
+      if (app.DM && app.DM.p) {
+        app.DM.p.col = color;
+        app.DM.p.dk = app.darken(color);
+      }
       app.markSw();
+      return true;
+    };
+    app.$("swatches").addEventListener("click", (e) => {
+      const b = e.target.closest("[data-color]");
+      if (b) app.setPlayerColor(b.dataset.color);
     });
+    app.$("colorPick").value = app.playerColor;
+    app.$("colorPick").addEventListener("input", (e) => app.setPlayerColor(e.target.value));
     app.$("hb").onclick = () => {
       app.S.click();
       app.$("how").style.display = "none";

@@ -78,7 +78,9 @@ export function install(app) {
         localStorage.ob_lay = "mid";
         localStorage.ob_v17 = "1";
       } else app.lay = localStorage.ob_lay === "top" ? "top" : "mid";
-      app.playerColor = localStorage.ob_color || "#69ff36";
+      app.playerColor = /^#[0-9a-f]{6}$/i.test(localStorage.ob_color)
+        ? localStorage.ob_color
+        : "#69ff36";
       app.environment = [
         "leaves",
         "rain",

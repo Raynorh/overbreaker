@@ -19,7 +19,7 @@
     input[type="color"] { width: 34px; height: 30px; border: 1px solid #343d6b; border-radius: 8px; background: none; padding: 2px; }
     .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
     .row > b { font-size: 12px; opacity: 0.75; min-width: 48px; text-align: right; margin-right: 4px; }
-    .key { display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 6px 8px; font-size: 11px; line-height: 1.2; }
+    .key { display: flex; flex-direction: column; align-items: center; min-width: 66px; padding: 6px 8px; font-size: 11px; line-height: 1.2; }
     .key kbd { font: bold 16px system-ui, sans-serif; color: #fff; }
     .key.off { opacity: 0.3; pointer-events: none; }
     .hint { font-size: 12px; opacity: 0.65; text-align: center; }
@@ -33,11 +33,12 @@
     <div class="group"><span>Rival</span><span id="styleE"></span></div>
     <div class="group"><span>Velocidad</span><span id="speed"></span></div>
     <div class="group"><button id="demo">▶ Combo</button></div>
+    <label class="group" style="cursor:pointer"><input id="perfect" type="checkbox" /> <span style="opacity:1">Defensa perfecta (contraataque)</span></label>
   </div>
   <div class="bar bottom">
     <div class="row" id="rowP"></div>
     <div class="row" id="rowE"></div>
-    <div class="hint">Teclado: A S D F atacan · J bloqueo · K parry · L esquiva (Boxeo) · Espacio combo · Rival: 7 8 9 0 atacan, 4 bloqueo, 5 parry</div>
+    <div class="hint">Teclado: A S D F atacan · J K L M defensas (el rival ataca a la vez) · G H T V X Z momentos del combate · R reinicia · Espacio combo · Rival: 7 8 9 0 atacan, 4 bloqueo, 5 parry</div>
   </div>
   <script type="module">
     import { createPractice, PLAYER_KEYS, RIVAL_KEYS, STYLE_LABELS } from "./practice.js";
@@ -69,8 +70,9 @@
     choice(document.getElementById("styleP"), styles, () => practice.player.style, (v) => practice.setStyle("p", v));
     choice(document.getElementById("styleE"), styles, () => practice.rival.style, (v) => practice.setStyle("e", v));
     choice(document.getElementById("speed"), [[1, "1×"], [0.5, "½×"], [0.25, "¼×"]], () => practice.speed, (v) => (practice.speed = v));
-    document.getElementById("color").oninput = (event) => practice.setColor(event.target.value, "#0b2a0a");
+    document.getElementById("color").oninput = (event) => practice.setColor(event.target.value);
     document.getElementById("demo").onclick = () => practice.demo();
+    document.getElementById("perfect").onchange = (event) => (practice.perfect = event.target.checked);
 
     // Teclas en pantalla (también para móvil), con los nombres del estilo actual.
     const keyDefs = (side) => (side === "p" ? PLAYER_KEYS : RIVAL_KEYS);
@@ -83,7 +85,12 @@
         host.appendChild(label);
         const names = practice.labels(side);
         for (const [key, action] of Object.entries(keyDefs(side))) {
-          const text = action.kind === "attack" ? names.attack[action.lane] : names[action.kind];
+          const text =
+            action.kind === "attack"
+              ? names.attack[action.lane]
+              : action.kind === "state"
+                ? names.states[action.state]
+                : names[action.kind];
           const button = document.createElement("button");
           button.className = "key" + (text ? "" : " off");
           button.innerHTML = "<kbd>" + key.toUpperCase() + "</kbd><span>" + (text || "—") + "</span>";

@@ -1,11 +1,12 @@
-// Dibujo de luchadores con hojas de sprites (cuerpo + guantes en capas).
+// Dibujo de luchadores con atlas de sprites (cuerpo + guantes en capas).
 //
-// Cada estilo con sprites aporta una hoja `body` (silueta blanca con alfa, que se
-// tiñe con el color del jugador) y una hoja `gloves` (guantes y efectos con su
-// color original). Las hojas se cargan al primer dibujo; hasta entonces, o fuera
-// del navegador (pruebas), no se dibuja nada y no falla nada.
+// Cada estilo con sprites aporta un atlas `body` (siluetas blancas con alfa, que se
+// tiñen con el color del jugador) y un atlas `gloves` (guantes y efectos con su
+// color original). Cada cuadro se recorta a su contenido y se coloca respecto a un
+// origen común: el centro de los pies sobre el suelo. Los atlas se cargan al primer
+// dibujo; hasta entonces, o fuera del navegador (pruebas), no se dibuja nada.
 
-export function createSpriteSheets({ manifest, bodyUrl, glovesUrl }) {
+export function createSpriteSheets({ bodyUrl, glovesUrl }) {
   let images = null;
   const tints = new Map();
 
@@ -24,7 +25,7 @@ export function createSpriteSheets({ manifest, bodyUrl, glovesUrl }) {
     return !!(sheets && sheets.body.complete && sheets.body.naturalWidth && sheets.gloves.complete && sheets.gloves.naturalWidth);
   };
 
-  // Hoja teñida de un solo color, guardada en caché (la cantidad de colores es pequeña).
+  // Atlas teñido de un solo color, guardado en caché (la cantidad de colores es pequeña).
   function tinted(layer, color) {
     const key = layer + "|" + color;
     if (tints.has(key)) return tints.get(key);
@@ -43,21 +44,18 @@ export function createSpriteSheets({ manifest, bodyUrl, glovesUrl }) {
     return canvas;
   }
 
-  // Dibuja un cuadro de la hoja con los pies en (x, y). `tint` reemplaza el color
-  // del cuerpo (y de los guantes si `flat`, para destellos de impacto).
-  function draw(g, { row, column, x, y, scale, face, tint, flat }) {
+  // Dibuja un cuadro con los pies en (x, y). `tint` reemplaza el color del cuerpo
+  // y `flat`, si se indica, el de los guantes (destellos de impacto).
+  function draw(g, { frame, x, y, scale, face, tint, flat }) {
     if (!ready()) return false;
-    const { w, h } = manifest.cell;
-    const sx = column * w,
-      sy = row * h;
     const body = tint ? tinted("body", tint) : images.body;
     const gloves = flat ? tinted("gloves", flat) : images.gloves;
     if (!body || !gloves) return false;
     g.save();
     g.translate(x, y);
     g.scale(face * scale, scale);
-    g.drawImage(body, sx, sy, w, h, -manifest.anchor.x, -manifest.anchor.y, w, h);
-    g.drawImage(gloves, sx, sy, w, h, -manifest.anchor.x, -manifest.anchor.y, w, h);
+    g.drawImage(body, frame.x, frame.y, frame.w, frame.h, frame.ox, frame.oy, frame.w, frame.h);
+    g.drawImage(gloves, frame.x, frame.y, frame.w, frame.h, frame.ox, frame.oy, frame.w, frame.h);
     g.restore();
     return true;
   }

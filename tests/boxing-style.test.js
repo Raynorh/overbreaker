@@ -39,7 +39,7 @@ test("cada animación de cada estilo es válida y usa solo articulaciones conoci
       }
     });
     if (meta && meta.impact !== undefined)
-      assert.ok(meta.impact > 0 && meta.impact < 1, name + " impacto");
+      assert.ok(meta.impact >= 0 && meta.impact < 1, name + " impacto");
     if (!hold) assert.deepEqual(frames.at(-1)[1], {}, name + " regresa a la guardia");
   }
 });

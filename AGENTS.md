@@ -18,7 +18,12 @@ El juego no requiere framework, compilación ni dependencias de ejecución. El s
 | `src/game/` | Combate, notas, combos, decisiones del rival, reglas y balance. |
 | `src/audio/` | Reproducción, mezcla, carga y validación de paquetes de audio. |
 | `src/rendering/` | Escena, HUD, poses, animación y efectos visuales de Canvas. |
-| `src/rendering/styles/` | Estilos de lucha como datos puros (poses, secuencias, alias y reacciones). Un estilo se registra en `fighters.js` y no toca las reglas del combate. |
+| `src/rendering/styles/` | Estilos de lucha como datos puros (poses, secuencias, alias y reacciones). Un estilo se registra en `fighters.js` y no toca las reglas del combate. El estilo por defecto (`boxeador`) usa sprites; `boxing` y `taekwondo` se dibujan con código. |
+| `src/rendering/sprites.js` | Dibujo de luchadores con atlas de sprites (cuerpo teñible + guantes). |
+| `src/assets/boxeador/` | Atlas y manifiesto del Boxeador. **Se generan**: no editar a mano. |
+| `art/boxeador/` | GIF originales del Boxeador (fuente de los atlas). |
+| `tools/build_sprites.py` | Convierte `art/boxeador/*.gif` en los atlas (`python3 tools/build_sprites.py`; requiere Pillow, NumPy y SciPy). Hay que volver a ejecutarlo si cambia algún GIF. |
+| `src/practice/` | Modo práctica (`/src/practice/practica.html`): ver cada movimiento al pulsar su tecla, sin música ni puntos. |
 | `src/ui/` | Teclado, punteros, paneles y configuración de la interfaz. |
 | `src/storage/` | Lectura validada de ajustes y persistencia IndexedDB. |
 | `styles/` | Estilos; `index.html` conserva la estructura de la página. |
