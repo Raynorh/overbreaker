@@ -18,6 +18,7 @@ El juego no requiere framework, compilación ni dependencias de ejecución. El s
 | `src/game/` | Combate, notas, combos, decisiones del rival, reglas y balance. |
 | `src/audio/` | Reproducción, mezcla, carga y validación de paquetes de audio. |
 | `src/rendering/` | Escena, HUD, poses, animación y efectos visuales de Canvas. |
+| `src/rendering/styles/` | Estilos de lucha como datos puros (poses, secuencias, alias y reacciones). Un estilo se registra en `fighters.js` y no toca las reglas del combate. |
 | `src/ui/` | Teclado, punteros, paneles y configuración de la interfaz. |
 | `src/storage/` | Lectura validada de ajustes y persistencia IndexedDB. |
 | `styles/` | Estilos; `index.html` conserva la estructura de la página. |

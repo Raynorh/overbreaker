@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1" />
+  <title>OVERBREAKER · Práctica</title>
+  <style>
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #0b0d16; color: #e8ecff; font-family: system-ui, sans-serif; overflow: hidden; }
+    canvas { position: fixed; inset: 0; width: 100%; height: 100%; display: block; }
+    .bar { position: fixed; left: 0; right: 0; display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: center; padding: 8px 12px; background: rgba(11, 13, 22, 0.78); backdrop-filter: blur(4px); z-index: 2; }
+    .top { top: 0; }
+    .bottom { bottom: 0; justify-content: center; flex-direction: column; align-items: stretch; padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px)); }
+    .group { display: flex; align-items: center; gap: 6px; }
+    .group > span { font-size: 12px; opacity: 0.7; margin-right: 2px; }
+    button, a.back { font: inherit; font-size: 13px; color: #e8ecff; background: #1d2340; border: 1px solid #343d6b; border-radius: 8px; padding: 7px 11px; cursor: pointer; text-decoration: none; touch-action: manipulation; }
+    button.on { background: #3a4aa8; border-color: #7f92ff; }
+    button:active, .key:active { transform: scale(0.96); }
+    input[type="color"] { width: 34px; height: 30px; border: 1px solid #343d6b; border-radius: 8px; background: none; padding: 2px; }
+    .row { display: flex; gap: 6px; justify-content: center; flex-wrap: wrap; align-items: center; }
+    .row > b { font-size: 12px; opacity: 0.75; min-width: 48px; text-align: right; margin-right: 4px; }
+    .key { display: flex; flex-direction: column; align-items: center; min-width: 74px; padding: 6px 8px; font-size: 11px; line-height: 1.2; }
+    .key kbd { font: bold 16px system-ui, sans-serif; color: #fff; }
+    .key.off { opacity: 0.3; pointer-events: none; }
+    .hint { font-size: 12px; opacity: 0.65; text-align: center; }
+  </style>
+</head>
+<body>
+  <canvas id="stage"></canvas>
+  <div class="bar top">
+    <a class="back" href="/">← Juego</a>
+    <div class="group"><span>Tú</span><span id="styleP"></span><input id="color" type="color" value="#69ff36" title="Color del luchador" /></div>
+    <div class="group"><span>Rival</span><span id="styleE"></span></div>
+    <div class="group"><span>Velocidad</span><span id="speed"></span></div>
+    <div class="group"><button id="demo">▶ Combo</button></div>
+  </div>
+  <div class="bar bottom">
+    <div class="row" id="rowP"></div>
+    <div class="row" id="rowE"></div>
+    <div class="hint">Teclado: A S D F atacan · J bloqueo · K parry · L esquiva (Boxeo) · Espacio combo · Rival: 7 8 9 0 atacan, 4 bloqueo, 5 parry</div>
+  </div>
+  <script type="module">
+    import { createPractice, PLAYER_KEYS, RIVAL_KEYS, STYLE_LABELS } from "./practice.js";
+
+    const practice = createPractice();
+    const canvas = document.getElementById("stage");
+    const g = canvas.getContext("2d");
+    let W = 0, H = 0;
+    function resize() {
+      const ratio = window.devicePixelRatio || 1;
+      W = window.innerWidth; H = window.innerHeight;
+      canvas.width = W * ratio; canvas.height = H * ratio;
+      g.setTransform(ratio, 0, 0, ratio, 0, 0);
+    }
+    window.addEventListener("resize", resize);
+    resize();
+
+    const choice = (host, items, current, onPick) => {
+      host.innerHTML = "";
+      for (const [value, label] of items) {
+        const button = document.createElement("button");
+        button.textContent = label;
+        button.className = value === current() ? "on" : "";
+        button.onclick = () => { onPick(value); for (const b of host.children) b.className = ""; button.className = "on"; refreshKeys(); };
+        host.appendChild(button);
+      }
+    };
+    const styles = practice.styles().map((name) => [name, STYLE_LABELS[name] || name]);
+    choice(document.getElementById("styleP"), styles, () => practice.player.style, (v) => practice.setStyle("p", v));
+    choice(document.getElementById("styleE"), styles, () => practice.rival.style, (v) => practice.setStyle("e", v));
+    choice(document.getElementById("speed"), [[1, "1×"], [0.5, "½×"], [0.25, "¼×"]], () => practice.speed, (v) => (practice.speed = v));
+    document.getElementById("color").oninput = (event) => practice.setColor(event.target.value, "#0b2a0a");
+    document.getElementById("demo").onclick = () => practice.demo();
+
+    // Teclas en pantalla (también para móvil), con los nombres del estilo actual.
+    const keyDefs = (side) => (side === "p" ? PLAYER_KEYS : RIVAL_KEYS);
+    function refreshKeys() {
+      for (const side of ["p", "e"]) {
+        const host = document.getElementById(side === "p" ? "rowP" : "rowE");
+        host.innerHTML = "";
+        const label = document.createElement("b");
+        label.textContent = side === "p" ? "Tú" : "Rival";
+        host.appendChild(label);
+        const names = practice.labels(side);
+        for (const [key, action] of Object.entries(keyDefs(side))) {
+          const text = action.kind === "attack" ? names.attack[action.lane] : names[action.kind];
+          const button = document.createElement("button");
+          button.className = "key" + (text ? "" : " off");
+          button.innerHTML = "<kbd>" + key.toUpperCase() + "</kbd><span>" + (text || "—") + "</span>";
+          button.onpointerdown = (event) => { event.preventDefault(); practice.perform(side, action); };
+          host.appendChild(button);
+        }
+      }
+    }
+    refreshKeys();
+
+    window.addEventListener("keydown", (event) => {
+      if (event.repeat || event.ctrlKey || event.metaKey || event.altKey) return;
+      if (event.code === "Space") { event.preventDefault(); practice.demo(); return; }
+      const key = event.key.toLowerCase();
+      for (const side of ["p", "e"]) {
+        const action = keyDefs(side)[key];
+        if (action) { event.preventDefault(); practice.perform(side, action); }
+      }
+    });
+
+    let last = performance.now();
+    function frame(now) {
+      practice.step(Math.min(0.05, (now - last) / 1000));
+      last = now;
+      practice.draw(g, W, H);
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+  </script>
+</body>
+</html>

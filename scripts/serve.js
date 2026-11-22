@@ -12,6 +12,7 @@ const types = {
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.zip': 'application/zip',
+  '.png': 'image/png',
 };
 
 const server = createServer(async (request, response) => {

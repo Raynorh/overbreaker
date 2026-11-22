@@ -685,9 +685,15 @@ export function install(app) {
     } else {
       app.R.e.hp = Math.max(0, app.R.e.hp - d);
     }
-    app.R.e.an = "hurt";
-    app.R.e.at = 0;
-    app.R.e.fl = 0.18;
+    // Un golpe bloqueado conserva la pose defensiva del rival; uno que conecta
+    // activa la reacción propia del golpe recibido (presentación únicamente).
+    // La reacción se programa para el instante del impacto del golpe.
+    if (aiResult !== "block" && aiResult !== "parry")
+      app.scheduleReaction(
+        app.R.e,
+        app.reactionAnimation(app.R.e, i),
+        app.impactDelay(app.R.p),
+      );
     app.shake = Math.max(app.shake, 0.18 + d * 0.035);
     app.events.emit(
       "pop",
@@ -743,7 +749,7 @@ export function install(app) {
       "pop",
       app.pX() + 30 * app.sc(),
       app.py() + 10,
-      app.NAMES[l],
+      app.moveName(app.R.p, l),
       app.L[l].c,
       15,
     );

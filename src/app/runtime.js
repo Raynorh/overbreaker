@@ -100,10 +100,10 @@ export function install(app) {
       { n: "J", c: "#9b8cff", f: 196 },
       { n: "K", c: "#ff7bd5", f: 247 },
     ];
-    app.MOVES = ["punch", "kick", "gancho", "heavy"];
+    app.MOVES = ["jab", "cross", "hook", "uppercut"];
     app.BASE_D = ATTACK_DAMAGE;
-    app.NAMES = ["¡GOLPE!", "¡PATADA!", "¡GANCHO!", "¡GIRATORIA!"];
-    app.SH = ["GOLPE", "PATADA", "GANCHO", "GIRATORIA"];
+    app.NAMES = ["¡JAB!", "¡CROSS!", "¡HOOK!", "¡UPPERCUT!"];
+    app.SH = ["JAB", "CROSS", "HOOK", "UPPERCUT"];
     app.LW = () => Math.min(app.W / 6, 120);
     app.LX = () => (app.W - app.LW() * 6) / 2;
     app.BH = () => Math.max(66, app.H * 0.13);

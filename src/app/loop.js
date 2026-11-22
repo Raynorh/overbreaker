@@ -49,13 +49,7 @@ export function install(app) {
     if (app.R && app.mode !== "menu") {
       app.R.p.sb = app.SB[app.stance()] || {};
     }
-    for (const f of fs) {
-      f.at += fd;
-      if (f.fl > 0) f.fl -= dt;
-      const A = app.AN[f.an];
-      if (A && !A[2] && f.at >= A[0]) f.an = "idle";
-      app.spring(f, fd);
-    }
+    for (const f of fs) app.stepFighter(f, fd, dt);
     for (const f of app.fx) {
       f.l -= pd;
       f.y = (f.y || app.AH * 0.3) - pd * 40;

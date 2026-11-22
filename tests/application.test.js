@@ -78,6 +78,7 @@ test("menu, combat, pause, rematch and rendering are wired", () => {
   app.press(0);
   assert.equal(note.done, 1);
   assert.equal(app.M.perf, 1);
+  assert.equal(app.R.p.an, "jab");
   for (let frame = 3; frame < 1500; frame++) app.loop(frame * 16);
   app.newMatch();
   app.DN[0] = 1;
@@ -115,7 +116,7 @@ test("survival, HUD variants, preview, and configuration paths execute", () => {
 
 test("drawing fighters is read-only and preview uses its own context", () => {
   const fighter = app.mkF(1, "#fff", "#333");
-  fighter.an = "punch";
+  fighter.an = "jab";
   for (let i = 0; i < 10; i++) {
     fighter.at += 0.016;
     app.spring(fighter, 0.016);
@@ -136,5 +137,25 @@ test("slow motion does not change note time, and every short frame interval is c
   app.last = 100;
   app.loop(300);
   assert.ok(Math.abs(app.R.t - start - 0.2) < 1e-9);
+  app.toMenu();
+});
+
+test("boxing attack library exposes distinct procedural animations", () => {
+  for (const name of ["jab", "cross", "hook", "uppercut"]) {
+    assert.ok(app.AN[name], `missing ${name} animation`);
+    assert.ok(app.AN[name][0] > 0);
+    assert.ok(app.AN[name][1].length >= 4);
+  }
+  assert.deepEqual(app.MOVES, ["jab", "cross", "hook", "uppercut"]);
+  for (const [lane, expected] of app.MOVES.entries()) {
+    app.newMatch();
+    app.R.intro = 0;
+    const note = { l: lane, t: app.R.t + 0.1, T: 1, role: "atk" };
+    app.R.notes = [note];
+    app.R.t = note.t;
+    app.press(lane);
+    assert.equal(note.done, 1);
+    assert.equal(app.R.p.an, expected);
+  }
   app.toMenu();
 });
